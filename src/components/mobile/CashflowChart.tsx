@@ -1,11 +1,14 @@
 import { useMemo } from 'react';
-import { TimeBucket } from '../../data/selectors';
+import { TimeBucket, calculateCumulativeNet } from '../../data/selectors';
 import { TypeFilter } from '../../data/types';
 
 interface CashflowChartProps {
   buckets: TimeBucket[];
   typeFilter: TypeFilter;
 }
+
+// Net line color - distinct blue/cyan for visibility
+const NET_LINE_COLOR = '#4dabf7';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -41,6 +44,11 @@ const styles: Record<string, React.CSSProperties> = {
     width: '8px',
     height: '8px',
     borderRadius: '2px',
+  },
+  legendLine: {
+    width: '12px',
+    height: '2px',
+    borderRadius: '1px',
   },
   chartArea: {
     position: 'relative',
@@ -101,31 +109,76 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export function CashflowChart({ buckets, typeFilter }: CashflowChartProps) {
-  const { maxValue, normalizedBuckets } = useMemo(() => {
-    // Find max value for scaling
-    let max = 0;
+  // Calculate cumulative net for the line chart
+  const bucketsWithNet = useMemo(() => {
+    return calculateCumulativeNet(buckets);
+  }, [buckets]);
+
+  const { maxBarValue, maxNetAbsolute, normalizedBuckets } = useMemo(() => {
+    // Find max value for bar scaling
+    let maxBar = 0;
     buckets.forEach((bucket) => {
-      if (typeFilter !== 'out') max = Math.max(max, bucket.income);
-      if (typeFilter !== 'in') max = Math.max(max, bucket.expense);
+      if (typeFilter !== 'out') maxBar = Math.max(maxBar, bucket.income);
+      if (typeFilter !== 'in') maxBar = Math.max(maxBar, bucket.expense);
+    });
+
+    // Find max absolute cumulative net for line scaling
+    let maxNet = 0;
+    bucketsWithNet.forEach((bucket) => {
+      maxNet = Math.max(maxNet, Math.abs(bucket.cumulativeNet));
     });
 
     // Avoid division by zero
-    if (max === 0) max = 1;
+    if (maxBar === 0) maxBar = 1;
+    if (maxNet === 0) maxNet = 1;
 
     // Normalize bucket values to percentages
-    const normalized = buckets.map((bucket) => ({
+    const normalized = bucketsWithNet.map((bucket) => ({
       ...bucket,
-      incomePercent: (bucket.income / max) * 100,
-      expensePercent: (bucket.expense / max) * 100,
+      incomePercent: (bucket.income / maxBar) * 100,
+      expensePercent: (bucket.expense / maxBar) * 100,
+      // Net line uses 0-100 scale where 50 is zero, above 50 is positive, below 50 is negative
+      netLineY: 50 - (bucket.cumulativeNet / maxNet) * 45, // 45 gives some margin
     }));
 
-    return { maxValue: max, normalizedBuckets: normalized };
-  }, [buckets, typeFilter]);
+    return { maxBarValue: maxBar, maxNetAbsolute: maxNet, normalizedBuckets: normalized };
+  }, [buckets, bucketsWithNet, typeFilter]);
 
   const hasData = buckets.some((b) => b.income > 0 || b.expense > 0);
 
   const showIncome = typeFilter !== 'out';
   const showExpense = typeFilter !== 'in';
+
+  // Generate SVG path for cumulative net line (smooth curve using quadratic bezier)
+  const netLinePath = useMemo(() => {
+    if (normalizedBuckets.length === 0) return '';
+
+    const points = normalizedBuckets.map((bucket, idx) => {
+      // X position: center of each bucket (percentage across width)
+      const x = ((idx + 0.5) / normalizedBuckets.length) * 100;
+      // Y position: from netLineY (0 = top, 100 = bottom)
+      const y = bucket.netLineY;
+      return { x, y };
+    });
+
+    // Build smooth path using quadratic bezier curves
+    if (points.length === 1) {
+      return `M ${points[0].x} ${points[0].y}`;
+    }
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      // Control point at midpoint for smooth curve
+      const cpX = (prev.x + curr.x) / 2;
+      path += ` Q ${cpX} ${prev.y}, ${cpX} ${(prev.y + curr.y) / 2}`;
+      path += ` Q ${cpX} ${curr.y}, ${curr.x} ${curr.y}`;
+    }
+
+    return path;
+  }, [normalizedBuckets]);
 
   return (
     <div style={styles.container}>
@@ -144,11 +197,16 @@ export function CashflowChart({ buckets, typeFilter }: CashflowChartProps) {
               Wydatki
             </span>
           )}
+          <span style={styles.legendItem}>
+            <span style={{ ...styles.legendLine, background: NET_LINE_COLOR }} />
+            Netto
+          </span>
         </div>
       </div>
 
       {hasData ? (
-        <div style={styles.chartArea}>
+        <div style={{ ...styles.chartArea, position: 'relative' }}>
+          {/* Bar chart layer */}
           {normalizedBuckets.map((bucket, idx) => (
             <div key={idx} style={styles.barGroup}>
               <div style={styles.barsContainer}>
@@ -176,6 +234,59 @@ export function CashflowChart({ buckets, typeFilter }: CashflowChartProps) {
               <span style={styles.label}>{bucket.label}</span>
             </div>
           ))}
+
+          {/* SVG overlay for cumulative net line */}
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: 'calc(100% - 20px)', // Exclude label area
+              pointerEvents: 'none',
+              overflow: 'visible',
+            }}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            {/* Zero line (dashed) */}
+            <line
+              x1="0"
+              y1="50"
+              x2="100"
+              y2="50"
+              stroke="#444"
+              strokeWidth="0.5"
+              strokeDasharray="2,2"
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Cumulative net line */}
+            <path
+              d={netLinePath}
+              fill="none"
+              stroke={NET_LINE_COLOR}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Data points on the line */}
+            {normalizedBuckets.map((bucket, idx) => {
+              const x = ((idx + 0.5) / normalizedBuckets.length) * 100;
+              return (
+                <circle
+                  key={idx}
+                  cx={x}
+                  cy={bucket.netLineY}
+                  r="3"
+                  fill={NET_LINE_COLOR}
+                  vectorEffect="non-scaling-stroke"
+                >
+                  <title>Netto: {bucket.cumulativeNet.toLocaleString('pl-PL')} PLN</title>
+                </circle>
+              );
+            })}
+          </svg>
         </div>
       ) : (
         <div style={styles.emptyState}>Brak danych do wyświetlenia</div>

@@ -56,6 +56,11 @@ export interface TimeBucket {
   expense: number;
 }
 
+export interface TimeBucketWithCumulativeNet extends TimeBucket {
+  net: number;           // income - expense for this bucket
+  cumulativeNet: number; // running total of net from left to right
+}
+
 function getWeekNumber(date: Date): number {
   const startOfYear = new Date(date.getFullYear(), 0, 1);
   const diff = date.getTime() - startOfYear.getTime();
@@ -153,6 +158,28 @@ export function bucketTransactionsByTime(
   });
 
   return Array.from(buckets.values());
+}
+
+/**
+ * Calculate cumulative net cashflow for each bucket.
+ * Net per bucket = income - expense
+ * Cumulative = running sum from left to right
+ */
+export function calculateCumulativeNet(
+  buckets: TimeBucket[]
+): TimeBucketWithCumulativeNet[] {
+  let cumulativeNet = 0;
+
+  return buckets.map((bucket) => {
+    const net = bucket.income - bucket.expense;
+    cumulativeNet += net;
+
+    return {
+      ...bucket,
+      net,
+      cumulativeNet,
+    };
+  });
 }
 
 // ============================================================================
