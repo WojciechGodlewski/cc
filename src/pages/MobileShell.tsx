@@ -3,6 +3,7 @@ import { BankTab } from '../components/mobile/BankTab';
 import { FlowsTab } from '../components/mobile/FlowsTab';
 import { InvoicesTab } from '../components/mobile/InvoicesTab';
 import { AccountingTab } from '../components/mobile/AccountingTab';
+import { FinancialDashboard } from '../components/mobile/FinancialDashboard';
 
 const tabs = [
   { path: 'bank', label: 'Bank', icon: '🏦' },
@@ -56,6 +57,7 @@ export function MobileShell() {
   return (
     <div style={styles.container}>
       <main style={styles.content}>
+        <FinancialDashboard />
         <Routes>
           <Route path="bank" element={<BankTab />} />
           <Route path="flows" element={<FlowsTab />} />

@@ -1,8 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useAppState } from '../../data/AppStateContext';
-
-type PeriodFilter = 7 | 30 | 90;
-type TypeFilter = 'all' | 'in' | 'out';
+import { filterTransactions, calculateTotals, formatCurrency } from '../../data/selectors';
+import { PeriodFilter, TypeFilter } from '../../data/types';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -137,38 +136,19 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export function FlowsTab() {
-  const { state } = useAppState();
-  const [period, setPeriod] = useState<PeriodFilter>(30);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const { state, dispatch } = useAppState();
+  const { period, typeFilter } = state.dashboardFilters;
+
+  const setPeriod = (p: PeriodFilter) => dispatch({ type: 'SET_PERIOD_FILTER', period: p });
+  const setTypeFilter = (t: TypeFilter) => dispatch({ type: 'SET_TYPE_FILTER', typeFilter: t });
 
   const filteredTransactions = useMemo(() => {
-    const now = new Date('2024-01-15'); // Mock "today"
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - period);
-
-    return state.transactions.filter((tx) => {
-      const txDate = new Date(tx.date);
-      const inPeriod = txDate >= cutoff;
-      const matchesType =
-        typeFilter === 'all' ||
-        (typeFilter === 'in' && tx.type === 'in') ||
-        (typeFilter === 'out' && tx.type === 'out');
-      return inPeriod && matchesType;
-    });
+    return filterTransactions(state.transactions, period, typeFilter);
   }, [state.transactions, period, typeFilter]);
 
   const totals = useMemo(() => {
-    const income = filteredTransactions
-      .filter((tx) => tx.type === 'in')
-      .reduce((sum, tx) => sum + tx.amount, 0);
-    const expense = filteredTransactions
-      .filter((tx) => tx.type === 'out')
-      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    return { income, expense, net: income - expense };
+    return calculateTotals(filteredTransactions);
   }, [filteredTransactions]);
-
-  const formatCurrency = (value: number) =>
-    value.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
 
   if (state.transactions.length === 0) {
     return (

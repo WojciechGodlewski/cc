@@ -2,6 +2,14 @@ export type Scenario = 'stable' | 'liquidity' | 'risk' | 'empty';
 
 export type BankProvider = 'mBank' | 'Santander';
 
+export type PeriodFilter = 7 | 30 | 90;
+export type TypeFilter = 'all' | 'in' | 'out';
+
+export interface DashboardFilters {
+  period: PeriodFilter;
+  typeFilter: TypeFilter;
+}
+
 export interface BankConnection {
   id: string;
   provider: BankProvider;
@@ -47,6 +55,7 @@ export interface AppState {
   collectionsInvoices: Invoice[];
   undoStack: { invoice: Invoice; fromStatus: Invoice['status'] }[];
   accounting: AccountingConnection;
+  dashboardFilters: DashboardFilters;
 }
 
 export const STORAGE_KEY = 'poc.mobile.state';
@@ -64,5 +73,9 @@ export const initialAppState: AppState = {
     provider: 'wFirma',
     connected: false,
     lastSync: null,
+  },
+  dashboardFilters: {
+    period: 30,
+    typeFilter: 'all',
   },
 };

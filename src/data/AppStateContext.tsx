@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AppState, initialAppState, STORAGE_KEY, Scenario, BankProvider, Invoice } from './types';
+import { AppState, initialAppState, STORAGE_KEY, Scenario, BankProvider, Invoice, PeriodFilter, TypeFilter } from './types';
 import { generateMockData } from './mockData';
 
 type Action =
@@ -11,6 +11,8 @@ type Action =
   | { type: 'UNDO_INVOICE' }
   | { type: 'CONNECT_ACCOUNTING' }
   | { type: 'SYNC_ACCOUNTING' }
+  | { type: 'SET_PERIOD_FILTER'; period: PeriodFilter }
+  | { type: 'SET_TYPE_FILTER'; typeFilter: TypeFilter }
   | { type: 'RESET' };
 
 function loadState(): AppState {
@@ -119,6 +121,26 @@ function appReducer(state: AppState, action: Action): AppState {
         accounting: {
           ...state.accounting,
           lastSync: new Date().toISOString(),
+        },
+      };
+    }
+
+    case 'SET_PERIOD_FILTER': {
+      return {
+        ...state,
+        dashboardFilters: {
+          ...state.dashboardFilters,
+          period: action.period,
+        },
+      };
+    }
+
+    case 'SET_TYPE_FILTER': {
+      return {
+        ...state,
+        dashboardFilters: {
+          ...state.dashboardFilters,
+          typeFilter: action.typeFilter,
         },
       };
     }
