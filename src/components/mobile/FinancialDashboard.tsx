@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAppState } from '../../data/AppStateContext';
-import { filterTransactions, calculateTotals, formatCurrency } from '../../data/selectors';
+import { filterTransactions, calculateTotals, formatCurrency, combineTransactions } from '../../data/selectors';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -72,12 +72,17 @@ export function FinancialDashboard() {
   const { state } = useAppState();
   const { period, typeFilter } = state.dashboardFilters;
 
-  const totals = useMemo(() => {
-    const filtered = filterTransactions(state.transactions, period, typeFilter);
-    return calculateTotals(filtered);
-  }, [state.transactions, period, typeFilter]);
+  // Combine real transactions with synthetic transactions from invoice decisions
+  const allTransactions = useMemo(() => {
+    return combineTransactions(state.transactions, state.invoiceDecisions);
+  }, [state.transactions, state.invoiceDecisions]);
 
-  const hasTransactions = state.transactions.length > 0;
+  const totals = useMemo(() => {
+    const filtered = filterTransactions(allTransactions, period, typeFilter);
+    return calculateTotals(filtered);
+  }, [allTransactions, period, typeFilter]);
+
+  const hasTransactions = allTransactions.length > 0;
 
   const periodLabel = `${period} dni`;
   const typeLabel = typeFilter === 'all' ? '' : typeFilter === 'in' ? ' (przychody)' : ' (wydatki)';

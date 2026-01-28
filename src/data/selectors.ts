@@ -1,4 +1,4 @@
-import { Transaction, PeriodFilter, TypeFilter } from './types';
+import { Transaction, PeriodFilter, TypeFilter, InvoiceDecision } from './types';
 
 // Mock "today" date - consistent with FlowsTab
 export const MOCK_TODAY = new Date('2024-01-15');
@@ -153,4 +153,80 @@ export function bucketTransactionsByTime(
   });
 
   return Array.from(buckets.values());
+}
+
+// ============================================================================
+// Invoice Decision -> Synthetic Cashflow Logic
+// ============================================================================
+
+// Factoring: immediate inflow at 97% of invoice amount
+const FACTORING_RATE = 0.97;
+
+// Collections: inflow 14 days later at 70% of invoice amount
+const COLLECTIONS_RATE = 0.70;
+const COLLECTIONS_DELAY_DAYS = 14;
+
+/**
+ * Generate synthetic transactions from invoice decisions.
+ *
+ * Decision logic:
+ * - Factoring: Add inflow on decision date, amount = invoice.amount * 0.97
+ * - Collections: Add inflow 14 days after decision, amount = invoice.amount * 0.70
+ * - Ignore: No cashflow effect
+ */
+export function generateSyntheticTransactions(
+  decisions: InvoiceDecision[]
+): Transaction[] {
+  const syntheticTx: Transaction[] = [];
+
+  decisions.forEach((decision) => {
+    if (decision.decision === 'ignore') {
+      // No financial impact for ignored invoices
+      return;
+    }
+
+    if (decision.decision === 'factoring') {
+      // Factoring: immediate inflow at 97%
+      const amount = Math.round(decision.invoice.amount * FACTORING_RATE * 100) / 100;
+      syntheticTx.push({
+        id: `synthetic-factoring-${decision.invoiceId}`,
+        date: decision.decisionTimestamp,
+        description: `Faktoring: ${decision.invoice.number} (${decision.invoice.contractor})`,
+        amount,
+        type: 'in',
+        category: 'Faktoring',
+        bankId: 'synthetic',
+      });
+    } else if (decision.decision === 'collections') {
+      // Collections: inflow 14 days later at 70%
+      const decisionDate = new Date(decision.decisionTimestamp);
+      decisionDate.setDate(decisionDate.getDate() + COLLECTIONS_DELAY_DAYS);
+      const paymentDate = decisionDate.toISOString().split('T')[0];
+
+      const amount = Math.round(decision.invoice.amount * COLLECTIONS_RATE * 100) / 100;
+      syntheticTx.push({
+        id: `synthetic-collections-${decision.invoiceId}`,
+        date: paymentDate,
+        description: `Windykacja: ${decision.invoice.number} (${decision.invoice.contractor})`,
+        amount,
+        type: 'in',
+        category: 'Windykacja',
+        bankId: 'synthetic',
+      });
+    }
+  });
+
+  return syntheticTx;
+}
+
+/**
+ * Combine real transactions with synthetic transactions from invoice decisions.
+ * This is the primary selector for dashboard and flows chart.
+ */
+export function combineTransactions(
+  realTransactions: Transaction[],
+  invoiceDecisions: InvoiceDecision[]
+): Transaction[] {
+  const syntheticTx = generateSyntheticTransactions(invoiceDecisions);
+  return [...realTransactions, ...syntheticTx].sort((a, b) => a.date.localeCompare(b.date));
 }

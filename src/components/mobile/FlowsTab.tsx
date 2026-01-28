@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAppState } from '../../data/AppStateContext';
-import { filterTransactions, calculateTotals, formatCurrency, bucketTransactionsByTime } from '../../data/selectors';
+import { filterTransactions, calculateTotals, formatCurrency, bucketTransactionsByTime, combineTransactions } from '../../data/selectors';
 import { PeriodFilter, TypeFilter } from '../../data/types';
 import { CashflowChart } from './CashflowChart';
 
@@ -143,9 +143,14 @@ export function FlowsTab() {
   const setPeriod = (p: PeriodFilter) => dispatch({ type: 'SET_PERIOD_FILTER', period: p });
   const setTypeFilter = (t: TypeFilter) => dispatch({ type: 'SET_TYPE_FILTER', typeFilter: t });
 
+  // Combine real transactions with synthetic transactions from invoice decisions
+  const allTransactions = useMemo(() => {
+    return combineTransactions(state.transactions, state.invoiceDecisions);
+  }, [state.transactions, state.invoiceDecisions]);
+
   const filteredTransactions = useMemo(() => {
-    return filterTransactions(state.transactions, period, typeFilter);
-  }, [state.transactions, period, typeFilter]);
+    return filterTransactions(allTransactions, period, typeFilter);
+  }, [allTransactions, period, typeFilter]);
 
   const totals = useMemo(() => {
     return calculateTotals(filteredTransactions);
@@ -153,11 +158,11 @@ export function FlowsTab() {
 
   const chartBuckets = useMemo(() => {
     // Use all transactions (not type-filtered) for bucketing, so chart shows both bars
-    const allFiltered = filterTransactions(state.transactions, period, 'all');
+    const allFiltered = filterTransactions(allTransactions, period, 'all');
     return bucketTransactionsByTime(allFiltered, period);
-  }, [state.transactions, period]);
+  }, [allTransactions, period]);
 
-  if (state.transactions.length === 0) {
+  if (allTransactions.length === 0) {
     return (
       <div style={styles.container}>
         <header style={styles.header}>

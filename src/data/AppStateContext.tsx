@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AppState, initialAppState, STORAGE_KEY, Scenario, BankProvider, Invoice, PeriodFilter, TypeFilter } from './types';
+import { AppState, initialAppState, STORAGE_KEY, Scenario, BankProvider, Invoice, PeriodFilter, TypeFilter, InvoiceDecision, InvoiceDecisionType } from './types';
+import { MOCK_TODAY } from './selectors';
 import { generateMockData } from './mockData';
 
 type Action =
@@ -74,6 +75,22 @@ function appReducer(state: AppState, action: Action): AppState {
 
       const updatedInvoice = { ...invoice, status: newStatus };
 
+      // Use MOCK_TODAY for consistent demo behavior
+      const decisionTimestamp = MOCK_TODAY.toISOString().split('T')[0];
+
+      // Map status to decision type
+      const decisionType: InvoiceDecisionType =
+        newStatus === 'ignored' ? 'ignore' :
+        newStatus === 'factoring' ? 'factoring' : 'collections';
+
+      // Create invoice decision record (only for factoring/collections which have financial impact)
+      const newDecision: InvoiceDecision = {
+        invoiceId: invoice.id,
+        invoice: updatedInvoice,
+        decision: decisionType,
+        decisionTimestamp,
+      };
+
       return {
         ...state,
         invoices: state.invoices.filter(inv => inv.id !== action.invoiceId),
@@ -86,7 +103,8 @@ function appReducer(state: AppState, action: Action): AppState {
         collectionsInvoices: newStatus === 'collections'
           ? [...state.collectionsInvoices, updatedInvoice]
           : state.collectionsInvoices,
-        undoStack: [...state.undoStack, { invoice, fromStatus: 'pending' }],
+        invoiceDecisions: [...state.invoiceDecisions, newDecision],
+        undoStack: [...state.undoStack, { invoice, fromStatus: 'pending', decisionTimestamp }],
       };
     }
 
@@ -104,6 +122,8 @@ function appReducer(state: AppState, action: Action): AppState {
         ignoredInvoices: state.ignoredInvoices.filter(inv => inv.id !== lastAction.invoice.id),
         factoringInvoices: state.factoringInvoices.filter(inv => inv.id !== lastAction.invoice.id),
         collectionsInvoices: state.collectionsInvoices.filter(inv => inv.id !== lastAction.invoice.id),
+        // Remove the decision from invoiceDecisions (removes financial impact)
+        invoiceDecisions: state.invoiceDecisions.filter(d => d.invoiceId !== lastAction.invoice.id),
         undoStack: state.undoStack.slice(0, -1),
       };
     }

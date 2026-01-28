@@ -39,6 +39,15 @@ export interface Invoice {
   status: 'pending' | 'ignored' | 'factoring' | 'collections';
 }
 
+export type InvoiceDecisionType = 'factoring' | 'collections' | 'ignore';
+
+export interface InvoiceDecision {
+  invoiceId: string;
+  invoice: Invoice;
+  decision: InvoiceDecisionType;
+  decisionTimestamp: string; // ISO date string
+}
+
 export interface AccountingConnection {
   provider: string;
   connected: boolean;
@@ -53,7 +62,8 @@ export interface AppState {
   ignoredInvoices: Invoice[];
   factoringInvoices: Invoice[];
   collectionsInvoices: Invoice[];
-  undoStack: { invoice: Invoice; fromStatus: Invoice['status'] }[];
+  invoiceDecisions: InvoiceDecision[];
+  undoStack: { invoice: Invoice; fromStatus: Invoice['status']; decisionTimestamp: string }[];
   accounting: AccountingConnection;
   dashboardFilters: DashboardFilters;
 }
@@ -68,6 +78,7 @@ export const initialAppState: AppState = {
   ignoredInvoices: [],
   factoringInvoices: [],
   collectionsInvoices: [],
+  invoiceDecisions: [],
   undoStack: [],
   accounting: {
     provider: 'wFirma',
