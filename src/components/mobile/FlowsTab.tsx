@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useAppState } from '../../data/AppStateContext';
-import { filterTransactions, calculateTotals, formatCurrency } from '../../data/selectors';
+import { filterTransactions, calculateTotals, formatCurrency, bucketTransactionsByTime } from '../../data/selectors';
 import { PeriodFilter, TypeFilter } from '../../data/types';
+import { CashflowChart } from './CashflowChart';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -150,6 +151,12 @@ export function FlowsTab() {
     return calculateTotals(filteredTransactions);
   }, [filteredTransactions]);
 
+  const chartBuckets = useMemo(() => {
+    // Use all transactions (not type-filtered) for bucketing, so chart shows both bars
+    const allFiltered = filterTransactions(state.transactions, period, 'all');
+    return bucketTransactionsByTime(allFiltered, period);
+  }, [state.transactions, period]);
+
   if (state.transactions.length === 0) {
     return (
       <div style={styles.container}>
@@ -238,6 +245,8 @@ export function FlowsTab() {
           ))}
         </div>
       </div>
+
+      <CashflowChart buckets={chartBuckets} typeFilter={typeFilter} />
 
       <div style={styles.listSection}>
         <h2 style={styles.sectionTitle}>
